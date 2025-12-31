@@ -1,43 +1,44 @@
 
 import { AIDecision, MarketDataCollection, AccountContext, CandleData, SingleMarketData, StrategyProfile, ChatMessage } from "../types";
 import { TAKER_FEE_RATE } from "../constants";
+import { GoogleGenAI } from "@google/genai";
 
-const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
-
-const callDeepSeek = async (apiKey: string, messages: any[]) => {
-    try {
-        const response = await fetch(DEEPSEEK_API_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey.trim()}` },
-            body: JSON.stringify({
-                model: "deepseek-chat",
-                messages: messages,
-                temperature: 0.1,
-            })
-        });
-        const json = await response.json();
-        if (json.error) throw new Error(json.error.message);
-        return json.choices[0].message.content;
-    } catch (e: any) {
-        throw new Error(e.message || "DeepSeek 请求失败");
-    }
-};
+// Initialize the Google GenAI client with the mandatory process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateAssistantResponse = async (apiKey: string, history: ChatMessage[]): Promise<string> => {
-    const metaPrompt: ChatMessage = {
-        role: 'system',
-        content: `你是一个顶级的加密货币量化策略工程师。
+    // Note: The apiKey parameter is kept for signature compatibility but we use the mandatory environment variable.
+    const systemInstruction = `你是一个顶级的加密货币量化策略工程师。
 你的任务是将用户的需求转化为：
-1. 核心交易逻辑（针对 DeepSeek 决策引擎的提示词）。
+1. 核心交易逻辑（针对决策引擎的提示词）。
 2. 选币建议（基于市场特征推荐适合的币种）。
 
 生成的提示词必须包含严格的 JSON 输出约束、移动止损逻辑。
-如果用户提到选币，请分析市场环境并建议币种清单。`
-    };
-    return await callDeepSeek(apiKey, [metaPrompt, ...history]);
+如果用户提到选币，请分析市场环境并建议币种清单。`;
+
+    const contents = history.map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }]
+    }));
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview',
+            contents,
+            config: {
+                systemInstruction,
+                temperature: 0.7,
+            },
+        });
+        return response.text || "未能生成有效响应";
+    } catch (e: any) {
+        throw new Error(e.message || "Gemini 请求失败");
+    }
 };
 
 export const getAIPreferredCoins = async (apiKey: string, marketSummary: any, strategy: StrategyProfile): Promise<string[]> => {
+    // Note: The apiKey parameter is kept for signature compatibility but we use the mandatory environment variable.
+    // Fix: Access strategy.aiSelectionCriteria safely after adding it to the interface
     const prompt = `基于以下市场概况和策略，从全量币种中挑选出最适合交易的 5-10 个币种：
     策略意图: ${strategy.systemPrompt}
     AI 选币标准: ${strategy.aiSelectionCriteria || "默认高波动、高成交量"}
@@ -45,8 +46,20 @@ export const getAIPreferredCoins = async (apiKey: string, marketSummary: any, st
     
     仅输出以逗号分隔的币种代码（如: BTC,ETH,SOL）。`;
     
-    const reply = await callDeepSeek(apiKey, [{ role: 'user', content: prompt }]);
-    return reply.split(',').map((s: string) => s.trim().toUpperCase());
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: {
+                temperature: 0.1,
+            },
+        });
+        const reply = response.text || "";
+        return reply.split(',').map((s: string) => s.trim().toUpperCase());
+    } catch (e: any) {
+        console.error("Gemini preferred coins selection failed", e);
+        return [];
+    }
 };
 
 function analyze1HTrend(candles: CandleData[]) {

@@ -31,6 +31,7 @@ export interface InstrumentInfo {
   minSz: string;
   displayName: string;
   state: string;
+  listTime: string; // 上市时间戳
 }
 
 export interface PositionData {
@@ -48,6 +49,7 @@ export interface PositionData {
   leverage: string;
   slTriggerPx?: string;
   tpTriggerPx?: string;
+  isProtected?: boolean; // 内部标记：是否已移至保本位
 }
 
 export interface AccountBalance {
@@ -81,6 +83,7 @@ export interface SingleMarketData {
     bids: OrderbookItem[];
   };
   trades: any[];
+  listTime?: number; // 转换后的上市时间
 }
 
 export type MarketDataCollection = Record<string, SingleMarketData>;
@@ -88,15 +91,18 @@ export type MarketDataCollection = Record<string, SingleMarketData>;
 export interface StrategyProfile {
   id: string;
   name: string;
-  coinSelectionMode: 'manual' | 'ai';
-  enabledCoins: string[]; // For manual mode
-  aiSelectionCriteria?: string; // For AI mode
+  coinSelectionMode: 'manual' | 'new-coin';
+  enabledCoins: string[]; 
+  maxPositions: number; // 最大同时持仓数
+  newCoinDays: number; // 定义新币的天数
   leverage: string;
   initialRisk: number; 
   beTriggerRoi: number; 
+  trailingCallback: number; // 移动止损回调比例 (例如 0.005)
   emptyInterval: number; 
   holdingInterval: number; 
   systemPrompt: string; 
+  aiSelectionCriteria?: string; // AI selection criteria for preferred coins
 }
 
 export interface TradingDecisionDetail {

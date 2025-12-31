@@ -22,7 +22,7 @@ const getHeaders = (method: string, requestPath: string, body: string = '', conf
     'OK-ACCESS-PASSPHRASE': config.okxPassphrase,
     'OK-ACCESS-SIGN': signature,
     'OK-ACCESS-TIMESTAMP': timestamp,
-    'OK-ACCESS-SIMULATED': '0' 
+    'OK-ACCESS-SIMULATED': config.isSimulation ? '1' : '0' 
   };
 };
 
@@ -43,7 +43,8 @@ export const fetchInstruments = async (): Promise<Record<string, InstrumentInfo>
           lotSz: info.lotSz,
           minSz: info.minSz,
           displayName: coin,
-          state: info.state
+          state: info.state,
+          listTime: info.listTime
         };
       }
     });
@@ -93,7 +94,7 @@ async function fetchSingleCoinData(coinKey: string, instId: string): Promise<Sin
     const responses = await Promise.all(endpoints.map(url => fetch(url).then(r => r.json())));
     const [tickerJson, candles1HJson, candles3mJson, fundingJson, oiJson, bookJson] = responses;
 
-    if (tickerJson.code !== '0') throw new Error(`Ticker Error: ${tickerJson.msg}`);
+    if (tickerJson.code !== '0') throw new Error(`Ticker Error for ${coinKey}: ${tickerJson.msg}`);
 
     return {
       ticker: tickerJson.data[0],
@@ -119,14 +120,27 @@ export const fetchMarketData = async (config: any): Promise<MarketDataCollection
   if (!activeStrategy) return {};
 
   const instruments = await fetchInstruments();
-  const coins = activeStrategy.enabledCoins;
+  let coins = [];
   
-  // Concurrently fetch to speed up
+  if (activeStrategy.coinSelectionMode === 'new-coin') {
+      const now = Date.now();
+      const threshold = activeStrategy.newCoinDays * 24 * 60 * 60 * 1000;
+      coins = Object.keys(instruments).filter(c => {
+          const listT = parseInt(instruments[c].listTime);
+          return (now - listT) < threshold;
+      });
+      // 限制扫描数量，防止 API 频率受限
+      coins = coins.slice(0, 15);
+  } else {
+      coins = activeStrategy.enabledCoins;
+  }
+  
   const fetchPromises = coins.map(async (coin: string) => {
     const inst = instruments[coin];
     if (inst) {
       try {
         const data = await fetchSingleCoinData(coin, inst.instId);
+        data.listTime = parseInt(inst.listTime);
         results[coin] = data;
       } catch (e) {
         console.warn(`Fetch ${coin} failed`, e);
@@ -156,7 +170,7 @@ export const fetchAccountData = async (config: any): Promise<AccountContext> => 
     
     let positions: PositionData[] = [];
     if (posJson.data && posJson.data.length > 0) {
-        positions = posJson.data.filter((p: any) => p.settleCcy === 'USDT').map((rawPos: any) => ({
+        positions = posJson.data.filter((p: any) => p.settleCcy === 'USDT' && parseFloat(p.pos) !== 0).map((rawPos: any) => ({
             instId: rawPos.instId, posSide: rawPos.posSide, pos: rawPos.pos,
             avgPx: rawPos.avgPx, breakEvenPx: rawPos.breakEvenPx, upl: rawPos.upl,
             uplRatio: rawPos.uplRatio, mgnMode: rawPos.mgnMode, margin: rawPos.margin,
@@ -189,9 +203,28 @@ export const executeOrder = async (order: AIDecision, config: any): Promise<any>
   return await response.json();
 };
 
+// 下移动止损算法单 (Trailing Stop)
+export const placeTrailingStop = async (instId: string, posSide: string, size: string, callbackRatio: number, config: any) => {
+    if (config.isSimulation) return { code: "0" };
+    const path = "/api/v5/trade/order-algo";
+    const body = JSON.stringify({
+        instId, 
+        posSide, 
+        tdMode: 'isolated', 
+        side: posSide === 'long' ? 'sell' : 'buy',
+        ordType: 'trailing_stop', 
+        sz: size,
+        callbackRatio: callbackRatio.toString(),
+        reduceOnly: true
+    });
+    const res = await fetch(BASE_URL + path, { method: 'POST', headers: getHeaders('POST', path, body, config), body });
+    return await res.json();
+};
+
 export const updatePositionTPSL = async (instId: string, posSide: string, size: string, slPrice: string, config: any) => {
     if (config.isSimulation) return { code: "0" };
     const path = "/api/v5/trade/order-algo";
+    // 覆盖之前的条件单
     const body = JSON.stringify({
         instId, posSide, tdMode: 'isolated', side: posSide === 'long' ? 'sell' : 'buy',
         ordType: 'conditional', sz: size, reduceOnly: true, slTriggerPx: slPrice, slOrdPx: '-1'
@@ -204,32 +237,15 @@ function formatCandles(apiCandles: any[]): CandleData[] {
   return apiCandles.map((c: string[]) => ({ ts: c[0], o: c[1], h: c[2], l: c[3], c: c[4], vol: c[5] })).reverse(); 
 }
 
-// Fix: Added missing candles5m and candles15m properties to the mock market data objects
 function generateMockMarketData(): MarketDataCollection {
   return {
-      BTC: { 
-        ticker: { instId: 'BTC-USDT-SWAP', last: '65000', lastSz: '0.1', askPx: '65001', bidPx: '64999', open24h: '64000', high24h: '66000', low24h: '63000', volCcy24h: '1000000', ts: Date.now().toString() }, 
-        candles5m: [], 
-        candles15m: [], 
-        candles1H: [], 
-        candles3m: [], 
-        fundingRate: '0.0001', 
-        nextFundingTime: '0', 
-        openInterest: '100', 
-        orderbook: { asks: [], bids: [] }, 
-        trades: [] 
+      PEPE: { 
+        ticker: { instId: 'PEPE-USDT-SWAP', last: '0.00001', lastSz: '1', askPx: '0.0000101', bidPx: '0.0000099', open24h: '0.000008', high24h: '0.000012', low24h: '0.000007', volCcy24h: '5000000', ts: Date.now().toString() }, 
+        candles5m: [], candles15m: [], candles1H: [], candles3m: [], fundingRate: '0.0001', nextFundingTime: '0', openInterest: '100', orderbook: { asks: [], bids: [] }, trades: [], listTime: Date.now() - 10000000
       },
-      ETH: { 
-        ticker: { instId: 'ETH-USDT-SWAP', last: '3500', lastSz: '1', askPx: '3501', bidPx: '3499', open24h: '3400', high24h: '3600', low24h: '3300', volCcy24h: '1000000', ts: Date.now().toString() }, 
-        candles5m: [], 
-        candles15m: [], 
-        candles1H: [], 
-        candles3m: [], 
-        fundingRate: '0.0001', 
-        nextFundingTime: '0', 
-        openInterest: '100', 
-        orderbook: { asks: [], bids: [] }, 
-        trades: [] 
+      SUI: { 
+        ticker: { instId: 'SUI-USDT-SWAP', last: '2.5', lastSz: '1', askPx: '2.51', bidPx: '2.49', open24h: '2.3', high24h: '2.7', low24h: '2.1', volCcy24h: '2000000', ts: Date.now().toString() }, 
+        candles5m: [], candles15m: [], candles1H: [], candles3m: [], fundingRate: '0.0001', nextFundingTime: '0', openInterest: '100', orderbook: { asks: [], bids: [] }, trades: [], listTime: Date.now() - 5000000
       }
   };
 }
