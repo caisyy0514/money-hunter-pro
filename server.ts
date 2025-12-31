@@ -55,7 +55,6 @@ const runTradingLoop = async () => {
         for (const decision of decisions) {
             if (decision.action === 'HOLD') continue;
             
-            // 下单规模计算
             const eq = parseFloat(accountData.balance.totalEq);
             const instInfo = (await okxService.fetchInstruments())[decision.coin];
             if (!instInfo) continue;
@@ -87,7 +86,6 @@ const runTradingLoop = async () => {
     }
 };
 
-// 初始元数据同步
 okxService.fetchInstruments().then(() => addLog('INFO', '交易所元数据同步完成'));
 setInterval(runTradingLoop, 2000);
 
@@ -106,6 +104,17 @@ app.post('/api/toggle', (req, res) => {
     isRunning = req.body.running;
     addLog('INFO', isRunning ? '引擎启动' : '引擎停止');
     res.json({ success: true });
+});
+
+app.post('/api/assistant/chat', async (req, res) => {
+    try {
+        const { messages, apiKey } = req.body;
+        if (!apiKey) return res.status(400).json({ error: "Missing API Key" });
+        const reply = await aiService.generateAssistantResponse(apiKey, messages);
+        res.json({ reply });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.listen(PORT, () => console.log(`Server on ${PORT}`));

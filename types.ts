@@ -137,3 +137,8 @@ export interface SystemLog {
   type: 'ERROR' | 'SUCCESS' | 'WARNING' | 'TRADE' | 'INFO';
   message: string;
 }
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
