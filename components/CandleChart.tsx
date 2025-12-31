@@ -7,15 +7,17 @@ interface Props {
   data: CandleData[];
 }
 
-// EMA Calculation Helper
+// Safe EMA Calculation Helper
 const calculateEMA = (data: any[], period: number) => {
+  if (!data || data.length === 0) return [];
   const k = 2 / (period + 1);
   const result = [];
-  let ema = data[0].c;
+  let ema = data[0].c || 0;
   result.push(ema);
   
   for (let i = 1; i < data.length; i++) {
-    ema = data[i].c * k + ema * (1 - k);
+    const close = data[i].c || 0;
+    ema = close * k + ema * (1 - k);
     result.push(ema);
   }
   return result;
@@ -23,34 +25,41 @@ const calculateEMA = (data: any[], period: number) => {
 
 const CandleChart: React.FC<Props> = ({ data }) => {
   const chartData = useMemo(() => {
-    const processed = data.map(d => ({
-      timeRaw: parseInt(d.ts),
-      time: new Date(parseInt(d.ts)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-      o: parseFloat(d.o),
-      h: parseFloat(d.h),
-      l: parseFloat(d.l),
-      c: parseFloat(d.c),
-      vol: parseFloat(d.vol),
-    }));
+    if (!data || data.length === 0) return [];
+    
+    try {
+        const processed = data.map(d => ({
+          timeRaw: parseInt(d.ts),
+          time: new Date(parseInt(d.ts)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          o: parseFloat(d.o) || 0,
+          h: parseFloat(d.h) || 0,
+          l: parseFloat(d.l) || 0,
+          c: parseFloat(d.c) || 0,
+          vol: parseFloat(d.vol) || 0,
+        }));
 
-    const ema15 = calculateEMA(processed, 15);
-    const ema60 = calculateEMA(processed, 60);
+        const ema15 = calculateEMA(processed, 15);
+        const ema60 = calculateEMA(processed, 60);
 
-    return processed.map((item, i) => ({
-      ...item,
-      ema15: ema15[i],
-      ema60: ema60[i],
-      isUp: item.c >= item.o
-    }));
+        return processed.map((item, i) => ({
+          ...item,
+          ema15: ema15[i] || item.c,
+          ema60: ema60[i] || item.c,
+          isUp: item.c >= item.o
+        }));
+    } catch (err) {
+        console.error("Candle processed error", err);
+        return [];
+    }
   }, [data]);
 
   const yDomain = useMemo(() => {
-    if (chartData.length === 0) return ['auto', 'auto'];
+    if (chartData.length === 0) return [0, 100];
     const lows = chartData.map(d => d.l);
     const highs = chartData.map(d => d.h);
     const min = Math.min(...lows);
     const max = Math.max(...highs);
-    const padding = (max - min) * 0.1; 
+    const padding = (max - min) * 0.1 || 10; 
     return [min - padding, max + padding];
   }, [chartData]);
 
@@ -89,7 +98,15 @@ const CandleChart: React.FC<Props> = ({ data }) => {
     );
   };
 
-  const lastPrice = chartData.length > 0 ? chartData[chartData.length - 1].c : 0;
+  if (chartData.length === 0) {
+      return (
+          <div className="w-full h-full flex items-center justify-center text-okx-subtext text-xs italic">
+              等待行情数据载入...
+          </div>
+      );
+  }
+
+  const lastPrice = chartData[chartData.length - 1].c;
 
   return (
     <div className="w-full h-full select-none">
@@ -128,14 +145,6 @@ const CandleChart: React.FC<Props> = ({ data }) => {
             cursor={{ stroke: '#52525b', strokeDasharray: '3 3' }}
             contentStyle={{backgroundColor: 'rgba(24, 24, 27, 0.9)', borderColor: '#27272a', borderRadius: '4px', fontSize: '11px', padding: '8px'}}
             itemStyle={{padding: 0}}
-            formatter={(value: any, name: string) => {
-                if (name === 'ema15') return [value?.toFixed(2), 'EMA15'];
-                if (name === 'ema60') return [value?.toFixed(2), 'EMA60'];
-                if (name === 'vol') return [parseInt(value).toLocaleString(), 'Vol'];
-                if (name === 'High') return [value, 'Price']; 
-                return [value, name];
-            }}
-            labelStyle={{color: '#a1a1aa', marginBottom: '4px'}}
             content={({ active, payload, label }) => {
                 if (active && payload && payload.length) {
                     const data = payload[0].payload;
@@ -184,8 +193,7 @@ const CandleChart: React.FC<Props> = ({ data }) => {
           <Line type="monotone" dataKey="ema15" stroke="#fbbf24" strokeWidth={1.5} dot={false} isAnimationActive={false} />
           <Line type="monotone" dataKey="ema60" stroke="#a855f7" strokeWidth={1.5} dot={false} isAnimationActive={false} />
 
-          {/* Current Price Line */}
-          <ReferenceLine y={lastPrice} stroke="rgba(255, 255, 255, 0.4)" strokeDasharray="3 3" label={{ position: 'right',  value: lastPrice, fill: 'white', fontSize: 10 }} />
+          <ReferenceLine y={lastPrice} stroke="rgba(255, 255, 255, 0.4)" strokeDasharray="3 3" label={{ position: 'right',  value: lastPrice.toFixed(1), fill: 'white', fontSize: 10 }} />
 
         </ComposedChart>
       </ResponsiveContainer>

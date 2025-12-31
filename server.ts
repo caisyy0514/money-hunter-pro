@@ -37,17 +37,28 @@ const runTradingLoop = async () => {
     if (isProcessing) return;
     isProcessing = true;
     try {
-        if (isRunning) {
-            const activeStrategy = config.strategies.find(s => s.id === config.activeStrategyId) || config.strategies[0];
-            
-            marketData = await okxService.fetchMarketData(config);
-            accountData = await okxService.fetchAccountData(config);
+        const activeStrategy = config.strategies.find(s => s.id === config.activeStrategyId) || config.strategies[0];
+        
+        // Always try to update market/account data for display
+        const mData = await okxService.fetchMarketData(config);
+        const aData = await okxService.fetchAccountData(config);
+        
+        if (mData) marketData = mData;
+        if (aData) accountData = aData;
 
+        if (isRunning && marketData && accountData) {
             const hasPos = accountData.positions.length > 0;
             const interval = (hasPos ? activeStrategy.holdingInterval : activeStrategy.emptyInterval) * 1000;
 
             if (Date.now() - lastAnalysisTime >= interval) {
                 lastAnalysisTime = Date.now();
+                
+                if (!config.deepseekApiKey) {
+                    addLog('ERROR', '未配置 DeepSeek API Key');
+                    isRunning = false;
+                    return;
+                }
+
                 addLog('INFO', `>>> 引擎扫描 (策略: ${activeStrategy.name}) <<<`);
                 
                 const decisions = await aiService.getTradingDecision(config.deepseekApiKey, marketData, accountData, activeStrategy);
@@ -58,9 +69,15 @@ const runTradingLoop = async () => {
                     if (decision.action === 'HOLD') continue;
                     
                     const instInfo = instruments[decision.coin];
-                    if (!instInfo) continue;
+                    if (!instInfo) {
+                        addLog('WARNING', `无法获取 ${decision.coin} 的合约信息，跳过执行`);
+                        continue;
+                    }
                     
-                    const price = parseFloat(marketData[decision.coin].ticker.last);
+                    const coinMData = marketData[decision.coin];
+                    if (!coinMData) continue;
+
+                    const price = parseFloat(coinMData.ticker.last);
                     const eq = parseFloat(accountData.balance.totalEq);
                     const targetMargin = eq * activeStrategy.initialRisk;
                     const marginPerContract = (parseFloat(instInfo.ctVal) * price) / parseFloat(activeStrategy.leverage);
@@ -68,8 +85,13 @@ const runTradingLoop = async () => {
                     
                     decision.size = contracts.toString();
                     
+                    if (contracts <= 0 && decision.action !== 'CLOSE' && decision.action !== 'UPDATE_TPSL') {
+                        addLog('WARNING', `[${decision.coin}] 风险控制：计算仓位过小 (0张)，跳过下单`);
+                        continue;
+                    }
+
                     try {
-                        addLog('TRADE', `[${decision.coin}] ${decision.action} | ${decision.reasoning}`);
+                        addLog('TRADE', `[${decision.coin}] 信号: ${decision.action} | 理由: ${decision.reasoning}`);
                         if (decision.action === 'UPDATE_TPSL') {
                           await okxService.updatePositionTPSL(decision.instId, 'long', decision.size, decision.trading_decision.stop_loss, config);
                         } else {
@@ -80,12 +102,9 @@ const runTradingLoop = async () => {
                     }
                 }
             }
-        } else {
-            marketData = await okxService.fetchMarketData(config);
-            accountData = await okxService.fetchAccountData(config);
         }
     } catch (e: any) {
-        if (isRunning) addLog('ERROR', `Loop Error: ${e.message}`);
+        if (isRunning) addLog('ERROR', `主循环异常: ${e.message}`);
     } finally {
         isProcessing = false;
     }
@@ -93,8 +112,8 @@ const runTradingLoop = async () => {
 
 setInterval(runTradingLoop, 2000);
 
+// STATUS API: NO CONFIG RETURNED
 app.get('/api/status', (req, res) => {
-    // Only send volatile operational data. Never send redacted config which might overwrite client state.
     res.json({ 
         isRunning, 
         marketData, 
@@ -105,9 +124,13 @@ app.get('/api/status', (req, res) => {
 });
 
 app.get('/api/config', (req, res) => {
-    // Separate endpoint for fetching config if needed, but client usually maintains its own.
-    // We send redacted version for safety.
-    res.json({ ...config, okxSecretKey: '***', okxPassphrase: '***', deepseekApiKey: '***' });
+    // Redact keys for security before sending to frontend
+    res.json({ 
+        ...config, 
+        okxSecretKey: config.okxSecretKey ? '***' : '', 
+        okxPassphrase: config.okxPassphrase ? '***' : '', 
+        deepseekApiKey: config.deepseekApiKey ? '***' : '' 
+    });
 });
 
 app.get('/api/instruments', async (req, res) => {
@@ -116,7 +139,13 @@ app.get('/api/instruments', async (req, res) => {
 });
 
 app.post('/api/config', (req, res) => {
-    config = { ...config, ...req.body };
+    // Preserve keys if they were redacted in the request
+    const newConfig = { ...req.body };
+    if (newConfig.okxSecretKey === '***') newConfig.okxSecretKey = config.okxSecretKey;
+    if (newConfig.okxPassphrase === '***') newConfig.okxPassphrase = config.okxPassphrase;
+    if (newConfig.deepseekApiKey === '***') newConfig.deepseekApiKey = config.deepseekApiKey;
+    
+    config = newConfig;
     addLog('INFO', '配置/策略已更新');
     res.json({ success: true });
 });
@@ -130,11 +159,13 @@ app.post('/api/toggle', (req, res) => {
 app.post('/api/assistant/chat', async (req, res) => {
     try {
         const { messages, apiKey } = req.body;
-        const reply = await aiService.generateAssistantResponse(apiKey, messages);
+        // If apiKey is masked, use the one from server config
+        const realKey = apiKey === '***' ? config.deepseekApiKey : apiKey;
+        const reply = await aiService.generateAssistantResponse(realKey, messages);
         res.json({ reply });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
     }
 });
 
-app.listen(PORT, () => console.log(`Server on ${PORT}`));
+app.listen(PORT, () => console.log(`[MONEY HUNTER] Server running on port ${PORT}`));
