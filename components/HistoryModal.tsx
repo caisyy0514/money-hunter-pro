@@ -25,11 +25,14 @@ const HistoryModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setLoading(true);
     try {
         const res = await fetch('/api/history');
+        if (!res.ok) return;
         const json = await res.json();
         setData(json);
         // Select first item by default if nothing selected
-        if (activeTab === 'recent' && json.recent.length > 0) setSelectedDecision(json.recent[0]);
-        if (activeTab === 'actions' && json.actions.length > 0) setSelectedDecision(json.actions[0]);
+        if (!selectedDecision) {
+            if (activeTab === 'recent' && json.recent.length > 0) setSelectedDecision(json.recent[0]);
+            else if (activeTab === 'actions' && json.actions.length > 0) setSelectedDecision(json.actions[0]);
+        }
     } catch (e) {
         console.error("Failed to fetch history", e);
     } finally {
@@ -49,7 +52,7 @@ const HistoryModal: React.FC<Props> = ({ isOpen, onClose }) => {
         <div className="p-4 border-b border-okx-border flex justify-between items-center bg-okx-card shrink-0">
           <h3 className="text-lg font-bold text-white flex items-center gap-2">
             <Clock size={20} className="text-okx-primary"/> 
-            云端战神历史回溯
+            云端战术历史回溯
           </h3>
           <div className="flex items-center gap-4">
             <button onClick={fetchHistory} className="text-okx-subtext hover:text-white transition-colors" title="刷新">
@@ -68,13 +71,13 @@ const HistoryModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 {/* Tabs */}
                 <div className="flex p-2 gap-2 border-b border-okx-border shrink-0">
                     <button 
-                        onClick={() => { setActiveTab('recent'); setData({...data}); }}
+                        onClick={() => setActiveTab('recent')}
                         className={`flex-1 py-2 text-xs font-bold rounded flex items-center justify-center gap-2 transition-colors ${activeTab === 'recent' ? 'bg-okx-primary text-white' : 'bg-okx-bg text-okx-subtext hover:text-white'}`}
                     >
                         <Clock size={14} /> 最近1小时 ({data.recent.length})
                     </button>
                     <button 
-                        onClick={() => { setActiveTab('actions'); setData({...data}); }}
+                        onClick={() => setActiveTab('actions')}
                         className={`flex-1 py-2 text-xs font-bold rounded flex items-center justify-center gap-2 transition-colors ${activeTab === 'actions' ? 'bg-orange-600 text-white' : 'bg-okx-bg text-okx-subtext hover:text-white'}`}
                     >
                         <Zap size={14} /> 关键行动 ({data.actions.length})
@@ -88,7 +91,7 @@ const HistoryModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     ) : (
                         currentList.map((item, idx) => (
                             <button
-                                key={idx}
+                                key={`history-${idx}-${item.coin}`}
                                 onClick={() => setSelectedDecision(item)}
                                 className={`w-full text-left p-4 border-b border-gray-800/50 hover:bg-white/5 transition-colors flex items-center justify-between group ${selectedDecision === item ? 'bg-white/5 border-l-2 border-l-okx-primary' : 'border-l-2 border-l-transparent'}`}
                             >
@@ -100,18 +103,18 @@ const HistoryModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                             item.action === 'UPDATE_TPSL' ? 'bg-yellow-500/20 text-yellow-400' :
                                             'bg-gray-700 text-gray-400'
                                         }`}>
-                                            {item.action === 'UPDATE_TPSL' ? 'TPSL' : item.action}
+                                            {String(item.action === 'UPDATE_TPSL' ? 'TPSL' : item.action)}
                                         </span>
                                         <span className="text-xs text-okx-subtext font-mono">
                                             {item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '--:--:--'}
                                         </span>
                                     </div>
                                     <div className="text-xs text-gray-400 truncate w-48">
-                                        {item.reasoning}
+                                        {String(item.reasoning)}
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <div className="text-xs font-bold text-okx-subtext">{item.trading_decision?.confidence}</div>
+                                    <div className="text-xs font-bold text-okx-subtext">{String(item.trading_decision?.confidence)}</div>
                                     <ChevronRight size={14} className={`text-gray-600 mt-1 ml-auto group-hover:text-white transition-colors ${selectedDecision === item ? 'text-okx-primary' : ''}`} />
                                 </div>
                             </button>
@@ -126,17 +129,17 @@ const HistoryModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     <>
                         <div className="absolute top-0 right-0 p-2 z-10 opacity-50 pointer-events-none">
                             <span className="text-[100px] font-bold text-white/5 leading-none tracking-tighter">
-                                {selectedDecision.action}
+                                {String(selectedDecision.action)}
                             </span>
                         </div>
                         <div className="p-4 border-b border-okx-border bg-[#121214] shrink-0 flex justify-between items-center z-20">
                             <div>
                                 <div className="text-xs text-okx-subtext mb-1">决策时间: {selectedDecision.timestamp ? new Date(selectedDecision.timestamp).toLocaleString() : '未知'}</div>
-                                <div className="font-bold text-white text-lg">{selectedDecision.stage_analysis.split(' ')[0]}</div>
+                                <div className="font-bold text-white text-lg">{String(selectedDecision.stage_analysis).split(' ')[0]}</div>
                             </div>
                             <div className="text-right">
                                 <div className="text-xs text-okx-subtext">置信度</div>
-                                <div className="text-okx-primary font-bold">{selectedDecision.trading_decision?.confidence}</div>
+                                <div className="text-okx-primary font-bold">{String(selectedDecision.trading_decision?.confidence)}</div>
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto custom-scrollbar z-10 relative">

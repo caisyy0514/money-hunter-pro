@@ -8,7 +8,6 @@ interface Props {
 }
 
 const DecisionReport: React.FC<Props> = ({ decision }) => {
-  // 1. Handle Null/Undefined Decision Prop
   if (!decision) {
       return (
           <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center h-full">
@@ -18,27 +17,27 @@ const DecisionReport: React.FC<Props> = ({ decision }) => {
       );
   }
 
-  // 2. Safety Helper to prevent "Objects are not valid as a React child" errors
+  // 强化版渲染函数，确保不会有裸对象进入 JSX 子节点
   const safeRender = (content: any, isPre: boolean = false) => {
     if (content === null || content === undefined) return <span className="text-gray-600 italic">--</span>;
     
     let stringContent = "";
     if (typeof content === 'string') {
         stringContent = content;
+    } else if (typeof content === 'number' || typeof content === 'boolean') {
+        stringContent = String(content);
     } else if (typeof content === 'object') {
         try {
-            // Determine if it's a React element (basic check) or just a plain object
-            if (React.isValidElement(content)) return content;
+            // 如果 AI 返回了 JSON 对象，将其格式化为字符串
             stringContent = JSON.stringify(content, null, 2);
         } catch (e) {
-            stringContent = "[Data Format Error]";
+            stringContent = "[解析数据出错]";
         }
     } else {
-        stringContent = String(content);
+        stringContent = "未知数据类型";
     }
 
     if (isPre) {
-        // preserve whitespace for analysis texts
         return <div className="whitespace-pre-wrap break-words">{stringContent}</div>;
     }
     return <span className="break-words">{stringContent}</span>;
@@ -75,7 +74,7 @@ const DecisionReport: React.FC<Props> = ({ decision }) => {
             </div>
             <div className="space-y-2">
                     <h4 className="flex items-center gap-2 text-indigo-400 font-bold uppercase tracking-wider text-xs">
-                    <Zap size={14}/> 04. {decision.coin || 'ETH'} 专项分析
+                    <Zap size={14}/> 04. {safeRender(decision.coin)} 专项分析
                     </h4>
                     <div className="p-4 bg-gray-900/50 border border-indigo-500/20 rounded-lg h-full">
                         {safeRender(decision.coin_analysis, true)}

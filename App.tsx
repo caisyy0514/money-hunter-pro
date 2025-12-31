@@ -5,7 +5,7 @@ import SettingsModal from './components/SettingsModal';
 import HistoryModal from './components/HistoryModal';
 import DecisionReport from './components/DecisionReport';
 import { MarketDataCollection, AccountContext, AIDecision, SystemLog, AppConfig, PositionData } from './types';
-import { Settings, Play, Pause, Activity, Terminal, History, Shield, Rocket, ExternalLink, X, ChevronDown, Loader2, Gauge } from 'lucide-react';
+import { Settings, Play, Pause, Activity, Terminal, Shield, Rocket, ExternalLink, X, ChevronDown, Loader2, Gauge } from 'lucide-react';
 import { DEFAULT_CONFIG, TAKER_FEE_RATE } from './constants';
 
 const App: React.FC = () => {
@@ -96,20 +96,28 @@ const App: React.FC = () => {
     }
   };
 
+  // 辅助函数：安全地获取推理文本的首个单词/短语
+  const getSafeReasoningLabel = (decision: AIDecision) => {
+      const reasoning = decision.reasoning;
+      if (typeof reasoning !== 'string') return "LOGIC";
+      return reasoning.split(' ')[0] || "LOGIC";
+  };
+
   const renderPositionCard = (pos: PositionData) => {
     const isLong = pos.posSide === 'long';
-    const ticker = marketData?.[pos.instId.split('-')[0]]?.ticker;
+    const coinName = pos.instId.split('-')[0];
+    const ticker = marketData?.[coinName]?.ticker;
     const netRoi = parseFloat(pos.uplRatio) - (TAKER_FEE_RATE * 2);
     const isProtected = netRoi >= activeStrategy.beTriggerRoi;
     
     return (
-      <div key={pos.instId + pos.posSide} className="bg-[#121214] border border-okx-border rounded-xl p-4 shadow-sm hover:border-okx-primary/30 transition-all group overflow-hidden relative">
+      <div key={`${pos.instId}-${pos.posSide}`} className="bg-[#121214] border border-okx-border rounded-xl p-4 shadow-sm hover:border-okx-primary/30 transition-all group overflow-hidden relative">
         <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/5">
            <div className="flex items-center gap-2">
               <span className={`px-2 py-0.5 text-[10px] font-black rounded uppercase ${isLong ? 'bg-okx-up/10 text-okx-up' : 'bg-okx-down/10 text-okx-down'}`}>
-                {pos.posSide} {pos.leverage}x
+                {String(pos.posSide)} {String(pos.leverage)}x
               </span>
-              <span className="font-bold text-white text-sm">{pos.instId.split('-')[0]}</span>
+              <span className="font-bold text-white text-sm">{coinName}</span>
               {isProtected && <span className="bg-emerald-500/20 text-emerald-400 p-1 rounded-full"><Shield size={12}/></span>}
            </div>
            <div className={`text-sm font-mono font-bold ${netRoi >= 0 ? 'text-okx-up' : 'text-okx-down'}`}>
@@ -120,7 +128,7 @@ const App: React.FC = () => {
         <div className="grid grid-cols-2 gap-y-3 text-[11px] font-mono relative z-10">
            <div className="space-y-1">
               <div className="text-okx-subtext">数量</div>
-              <div className="text-gray-200">{pos.pos} <span className="text-[10px] opacity-40">张</span></div>
+              <div className="text-gray-200">{String(pos.pos)} <span className="text-[10px] opacity-40">张</span></div>
            </div>
            <div className="space-y-1 text-right">
               <div className="text-okx-subtext">保证金</div>
@@ -128,7 +136,7 @@ const App: React.FC = () => {
            </div>
            <div className="space-y-1">
               <div className="text-okx-subtext">开仓价</div>
-              <div className="text-white">{pos.avgPx}</div>
+              <div className="text-white">{String(pos.avgPx)}</div>
            </div>
            <div className="space-y-1 text-right">
               <div className="text-okx-subtext">最新价</div>
@@ -169,7 +177,7 @@ const App: React.FC = () => {
                <Rocket size={14} className="text-purple-500" />
                <span className="text-xs font-bold text-okx-subtext">模式:</span>
                <button onClick={() => setIsSettingsOpen(true)} className="text-xs font-black text-white flex items-center gap-1 hover:text-okx-primary transition-colors">
-                  {activeStrategy.name} <ChevronDown size={12} />
+                  {String(activeStrategy.name)} <ChevronDown size={12} />
                </button>
             </div>
             
@@ -192,6 +200,7 @@ const App: React.FC = () => {
               {isRunning ? '任务执行中' : '启动猎手'}
             </button>
             <button onClick={() => setIsSettingsOpen(true)} className="p-2 hover:bg-okx-border rounded-lg"><Settings size={20} /></button>
+            <button onClick={() => setIsHistoryOpen(true)} className="p-2 hover:bg-okx-border rounded-lg"><Shield size={20} /></button>
           </div>
         </div>
       </header>
@@ -202,7 +211,7 @@ const App: React.FC = () => {
             <div className="flex gap-2 pb-1 shrink-0 overflow-x-auto custom-scrollbar">
                 {coinList.map(coin => (
                     <button key={coin} onClick={() => setActiveCoin(coin)} className={`px-5 py-2 rounded-full font-bold text-xs transition-all border shrink-0 ${activeCoin === coin ? 'bg-okx-primary border-okx-primary text-white shadow-lg' : 'bg-[#18181b] border-okx-border text-okx-subtext hover:border-white/10'}`}>
-                        {coin}
+                        {String(coin)}
                     </button>
                 ))}
             </div>
@@ -215,7 +224,7 @@ const App: React.FC = () => {
                 {logs.length === 0 ? <div className="text-gray-700 italic">初始化中...</div> : logs.slice().reverse().map(log => (
                     <div key={log.id} className="flex gap-4 opacity-80 hover:opacity-100 transition-opacity">
                         <span className="text-gray-600 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                        <span className={log.type === 'ERROR' ? 'text-okx-down' : log.type === 'SUCCESS' ? 'text-emerald-400' : log.type === 'TRADE' ? 'text-blue-400 font-bold' : 'text-okx-subtext'}>{log.message}</span>
+                        <span className={log.type === 'ERROR' ? 'text-okx-down' : log.type === 'SUCCESS' ? 'text-emerald-400' : log.type === 'TRADE' ? 'text-blue-400 font-bold' : 'text-okx-subtext'}>{String(log.message)}</span>
                     </div>
                 ))}
               </div>
@@ -232,15 +241,15 @@ const App: React.FC = () => {
                 </div>
              </div>
              <div className="bg-[#121214] rounded-2xl border border-okx-border p-6 space-y-4 shadow-xl">
-                <div className="flex justify-between items-center"><span className="font-black text-sm uppercase tracking-widest">{activeCoin} 侦察报告</span><span className="text-[9px] px-2 py-0.5 rounded-full bg-okx-primary/20 text-okx-primary font-black uppercase">AI Analysis</span></div>
+                <div className="flex justify-between items-center"><span className="font-black text-sm uppercase tracking-widest">{String(activeCoin)} 侦察报告</span><span className="text-[9px] px-2 py-0.5 rounded-full bg-okx-primary/20 text-okx-primary font-black uppercase">AI Analysis</span></div>
                 {decisions[activeCoin] ? (
                     <div className="space-y-4">
                         <div className={`p-4 rounded-xl font-black text-xl text-center border-2 transition-colors ${decisions[activeCoin].action === 'BUY' ? 'bg-okx-up/10 border-okx-up text-okx-up' : decisions[activeCoin].action === 'SELL' ? 'bg-okx-down/10 border-okx-down text-okx-down' : 'bg-white/5 border-white/5 text-gray-500'}`}>
-                            {decisions[activeCoin].action === 'HOLD' ? '等待时机' : decisions[activeCoin].action}
+                            {decisions[activeCoin].action === 'HOLD' ? '等待时机' : String(decisions[activeCoin].action)}
                         </div>
                         <div className="grid grid-cols-2 gap-4 text-[10px] font-mono">
-                            <div className="p-3 bg-black/20 rounded-lg border border-white/5"><div className="text-okx-subtext">信心值</div><div className="text-white text-sm font-bold">{decisions[activeCoin].trading_decision.confidence}</div></div>
-                            <div className="p-3 bg-black/20 rounded-lg border border-white/5 text-right"><div className="text-okx-subtext">预判逻辑</div><div className="text-purple-400 text-sm font-bold uppercase truncate">{decisions[activeCoin].reasoning.split(' ')[0]}</div></div>
+                            <div className="p-3 bg-black/20 rounded-lg border border-white/5"><div className="text-okx-subtext">信心值</div><div className="text-white text-sm font-bold">{String(decisions[activeCoin].trading_decision.confidence)}</div></div>
+                            <div className="p-3 bg-black/20 rounded-lg border border-white/5 text-right"><div className="text-okx-subtext">预判逻辑</div><div className="text-purple-400 text-sm font-bold uppercase truncate">{getSafeReasoningLabel(decisions[activeCoin])}</div></div>
                         </div>
                         <button onClick={() => setIsFullReportOpen(true)} className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition-all border border-white/5 flex items-center justify-center gap-2"><ExternalLink size={14} /> 深度战术推演</button>
                     </div>
@@ -251,10 +260,11 @@ const App: React.FC = () => {
       </main>
 
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} config={config} onSave={saveConfig} />
+      <HistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} />
       {isFullReportOpen && decisions[activeCoin] && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
               <div className="bg-[#121214] w-full max-w-4xl max-h-[85vh] rounded-2xl border border-okx-border flex flex-col overflow-hidden shadow-2xl">
-                  <div className="p-6 border-b border-okx-border flex justify-between items-center bg-black/20"><h3 className="font-black text-white flex items-center gap-3"><Gauge className="text-okx-primary" size={18}/> {activeCoin} 战术全景报告</h3><button onClick={() => setIsFullReportOpen(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button></div>
+                  <div className="p-6 border-b border-okx-border flex justify-between items-center bg-black/20"><h3 className="font-black text-white flex items-center gap-3"><Gauge className="text-okx-primary" size={18}/> {String(activeCoin)} 战术全景报告</h3><button onClick={() => setIsFullReportOpen(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button></div>
                   <div className="flex-1 overflow-y-auto custom-scrollbar"><DecisionReport decision={decisions[activeCoin]} /></div>
               </div>
           </div>
