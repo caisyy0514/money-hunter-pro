@@ -40,12 +40,6 @@ const runTradingLoop = async () => {
         if (isRunning) {
             const activeStrategy = config.strategies.find(s => s.id === config.activeStrategyId) || config.strategies[0];
             
-            // Handle AI Selection Mode
-            if (activeStrategy.coinSelectionMode === 'ai' && config.deepseekApiKey) {
-                // Periodically refresh AI selection? Or just once on start?
-                // For simplicity, let's keep it based on the enabledCoins which can be updated by a separate AI call
-            }
-
             marketData = await okxService.fetchMarketData(config);
             accountData = await okxService.fetchAccountData(config);
 
@@ -87,7 +81,6 @@ const runTradingLoop = async () => {
                 }
             }
         } else {
-            // Just fetch market data for UI when not running
             marketData = await okxService.fetchMarketData(config);
             accountData = await okxService.fetchAccountData(config);
         }
@@ -101,7 +94,20 @@ const runTradingLoop = async () => {
 setInterval(runTradingLoop, 2000);
 
 app.get('/api/status', (req, res) => {
-    res.json({ isRunning, config: { ...config, okxSecretKey: '***', okxPassphrase: '***', deepseekApiKey: '***' }, marketData, accountData, latestDecisions, logs });
+    // Only send volatile operational data. Never send redacted config which might overwrite client state.
+    res.json({ 
+        isRunning, 
+        marketData, 
+        accountData, 
+        latestDecisions, 
+        logs 
+    });
+});
+
+app.get('/api/config', (req, res) => {
+    // Separate endpoint for fetching config if needed, but client usually maintains its own.
+    // We send redacted version for safety.
+    res.json({ ...config, okxSecretKey: '***', okxPassphrase: '***', deepseekApiKey: '***' });
 });
 
 app.get('/api/instruments', async (req, res) => {
