@@ -4,7 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { MarketDataCollection, AccountContext, AIDecision, SystemLog, AppConfig, StrategyProfile } from './types';
-import { DEFAULT_CONFIG, COIN_CONFIG } from './constants';
+import { DEFAULT_CONFIG } from './constants';
 import * as okxService from './services/okxService';
 import * as aiService from './services/aiService';
 
@@ -29,7 +29,7 @@ let isProcessing = false;
 const addLog = (type: SystemLog['type'], message: string) => {
   const log: SystemLog = { id: Date.now().toString() + Math.random(), timestamp: new Date(), type, message };
   logs.push(log);
-  if (logs.length > 300) logs = logs.slice(-300);
+  if (logs.length > 500) logs = logs.slice(-500);
   console.log(`[${type}] ${message}`);
 };
 
@@ -37,65 +37,80 @@ const runTradingLoop = async () => {
     if (isProcessing) return;
     isProcessing = true;
     try {
-        marketData = await okxService.fetchMarketData(config);
-        accountData = await okxService.fetchAccountData(config);
-
-        if (!isRunning || !marketData || !accountData) return;
-
-        const activeStrategy = config.strategies.find(s => s.id === config.activeStrategyId) || config.strategies[0];
-        const hasPos = accountData.positions.length > 0;
-        const interval = (hasPos ? activeStrategy.holdingInterval : activeStrategy.emptyInterval) * 1000;
-
-        if (Date.now() - lastAnalysisTime < interval) return;
-        lastAnalysisTime = Date.now();
-
-        addLog('INFO', `>>> 引擎扫描 (周期: ${interval/1000}s, 策略: ${activeStrategy.name}) <<<`);
-        const decisions = await aiService.getTradingDecision(config.deepseekApiKey, marketData, accountData, activeStrategy);
-
-        for (const decision of decisions) {
-            if (decision.action === 'HOLD') continue;
+        if (isRunning) {
+            const activeStrategy = config.strategies.find(s => s.id === config.activeStrategyId) || config.strategies[0];
             
-            const eq = parseFloat(accountData.balance.totalEq);
-            const instInfo = (await okxService.fetchInstruments())[decision.coin];
-            if (!instInfo) continue;
-            
-            const price = parseFloat(marketData[decision.coin].ticker.last);
-            const marginPerContract = (parseFloat(instInfo.ctVal) * price) / parseFloat(activeStrategy.leverage);
-            const targetMargin = eq * activeStrategy.initialRisk;
-            const contracts = Math.floor(targetMargin / marginPerContract);
-            
-            decision.size = contracts.toString();
-            
-            try {
-                addLog('TRADE', `[${decision.coin}] 执行动作: ${decision.action} | 理由: ${decision.reasoning}`);
-                if (decision.action === 'UPDATE_TPSL') {
-                  const pos = accountData.positions.find(p => p.instId === decision.instId);
-                  if (pos) await okxService.updatePositionTPSL(decision.instId, pos.posSide as any, pos.pos, decision.trading_decision.stop_loss, config);
-                } else {
-                  await okxService.executeOrder(decision, config);
-                }
-                addLog('SUCCESS', `[${decision.coin}] 指令执行完毕`);
-            } catch (err: any) {
-                addLog('ERROR', `[${decision.coin}] 执行失败: ${err.message}`);
+            // Handle AI Selection Mode
+            if (activeStrategy.coinSelectionMode === 'ai' && config.deepseekApiKey) {
+                // Periodically refresh AI selection? Or just once on start?
+                // For simplicity, let's keep it based on the enabledCoins which can be updated by a separate AI call
             }
+
+            marketData = await okxService.fetchMarketData(config);
+            accountData = await okxService.fetchAccountData(config);
+
+            const hasPos = accountData.positions.length > 0;
+            const interval = (hasPos ? activeStrategy.holdingInterval : activeStrategy.emptyInterval) * 1000;
+
+            if (Date.now() - lastAnalysisTime >= interval) {
+                lastAnalysisTime = Date.now();
+                addLog('INFO', `>>> 引擎扫描 (策略: ${activeStrategy.name}) <<<`);
+                
+                const decisions = await aiService.getTradingDecision(config.deepseekApiKey, marketData, accountData, activeStrategy);
+                const instruments = await okxService.fetchInstruments();
+
+                for (const decision of decisions) {
+                    latestDecisions[decision.coin] = decision;
+                    if (decision.action === 'HOLD') continue;
+                    
+                    const instInfo = instruments[decision.coin];
+                    if (!instInfo) continue;
+                    
+                    const price = parseFloat(marketData[decision.coin].ticker.last);
+                    const eq = parseFloat(accountData.balance.totalEq);
+                    const targetMargin = eq * activeStrategy.initialRisk;
+                    const marginPerContract = (parseFloat(instInfo.ctVal) * price) / parseFloat(activeStrategy.leverage);
+                    const contracts = Math.floor(targetMargin / marginPerContract);
+                    
+                    decision.size = contracts.toString();
+                    
+                    try {
+                        addLog('TRADE', `[${decision.coin}] ${decision.action} | ${decision.reasoning}`);
+                        if (decision.action === 'UPDATE_TPSL') {
+                          await okxService.updatePositionTPSL(decision.instId, 'long', decision.size, decision.trading_decision.stop_loss, config);
+                        } else {
+                          await okxService.executeOrder(decision, config);
+                        }
+                    } catch (err: any) {
+                        addLog('ERROR', `[${decision.coin}] 执行失败: ${err.message}`);
+                    }
+                }
+            }
+        } else {
+            // Just fetch market data for UI when not running
+            marketData = await okxService.fetchMarketData(config);
+            accountData = await okxService.fetchAccountData(config);
         }
     } catch (e: any) {
-        addLog('ERROR', `系统运行异常: ${e.message}`);
+        if (isRunning) addLog('ERROR', `Loop Error: ${e.message}`);
     } finally {
         isProcessing = false;
     }
 };
 
-okxService.fetchInstruments().then(() => addLog('INFO', '交易所元数据同步完成'));
 setInterval(runTradingLoop, 2000);
 
 app.get('/api/status', (req, res) => {
     res.json({ isRunning, config: { ...config, okxSecretKey: '***', okxPassphrase: '***', deepseekApiKey: '***' }, marketData, accountData, latestDecisions, logs });
 });
 
+app.get('/api/instruments', async (req, res) => {
+    const insts = await okxService.fetchInstruments();
+    res.json(insts);
+});
+
 app.post('/api/config', (req, res) => {
-    const newConfig = req.body;
-    config = { ...config, ...newConfig };
+    config = { ...config, ...req.body };
     addLog('INFO', '配置/策略已更新');
     res.json({ success: true });
 });
@@ -109,7 +124,6 @@ app.post('/api/toggle', (req, res) => {
 app.post('/api/assistant/chat', async (req, res) => {
     try {
         const { messages, apiKey } = req.body;
-        if (!apiKey) return res.status(400).json({ error: "Missing API Key" });
         const reply = await aiService.generateAssistantResponse(apiKey, messages);
         res.json({ reply });
     } catch (e: any) {

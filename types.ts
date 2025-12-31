@@ -30,6 +30,7 @@ export interface InstrumentInfo {
   lotSz: string;
   minSz: string;
   displayName: string;
+  state: string;
 }
 
 export interface PositionData {
@@ -87,13 +88,15 @@ export type MarketDataCollection = Record<string, SingleMarketData>;
 export interface StrategyProfile {
   id: string;
   name: string;
-  enabledCoins: string[];
+  coinSelectionMode: 'manual' | 'ai';
+  enabledCoins: string[]; // For manual mode
+  aiSelectionCriteria?: string; // For AI mode
   leverage: string;
-  initialRisk: number; // 仓位占权益比例 (0-1)
-  beTriggerRoi: number; // 触发保本止损的净ROI
-  emptyInterval: number; // 空仓扫描频率 (s)
-  holdingInterval: number; // 持仓扫描频率 (s)
-  systemPrompt: string; // 自定义 AI 系统提示词
+  initialRisk: number; 
+  beTriggerRoi: number; 
+  emptyInterval: number; 
+  holdingInterval: number; 
+  systemPrompt: string; 
 }
 
 export interface TradingDecisionDetail {

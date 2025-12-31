@@ -14,9 +14,11 @@ export const COIN_CONFIG: Record<string, { instId: string; displayName: string; 
 export const TAKER_FEE_RATE = 0.0005; 
 export const DEFAULT_LEVERAGE = "20";
 
+// Fix: Added missing required coinSelectionMode property to comply with StrategyProfile interface
 const DEFAULT_STRATEGY: StrategyProfile = {
   id: "default-rolling",
   name: "EMA Hunter 默认滚仓",
+  coinSelectionMode: 'manual',
   enabledCoins: ["BTC", "ETH", "SOL"],
   leverage: "20",
   initialRisk: 0.15,
