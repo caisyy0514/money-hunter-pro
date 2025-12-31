@@ -48,6 +48,13 @@ const runTradingLoop = async () => {
         if (aData) accountData = aData;
 
         if (isRunning && marketData && accountData) {
+            // 实盘运行前的完整凭据检查
+            if (!config.isSimulation && (!config.okxApiKey || !config.okxSecretKey || !config.okxPassphrase)) {
+                addLog('ERROR', 'OKX 凭据配置不全，已停止猎手。请前往指挥部补全 API Key、Secret 和 Passphrase。');
+                isRunning = false;
+                return;
+            }
+
             for (const pos of accountData.positions) {
                 const posId = `${pos.instId}-${pos.posSide}`;
                 const netRoi = parseFloat(pos.uplRatio) - (TAKER_FEE_RATE * 2);
@@ -103,6 +110,7 @@ const runTradingLoop = async () => {
                     const coinMData = marketData[decision.coin];
                     const price = parseFloat(coinMData.ticker.last);
                     const eq = parseFloat(accountData.balance.totalEq);
+                    // 单次入场比例计算保证金
                     const targetMargin = eq * activeStrategy.initialRisk;
                     const marginPerContract = (parseFloat(instInfo.ctVal) * price) / parseFloat(activeStrategy.leverage);
                     const contracts = Math.floor(targetMargin / marginPerContract);
@@ -119,7 +127,7 @@ const runTradingLoop = async () => {
                                     activeStrategy.trailingCallback,
                                     config
                                 );
-                                addLog('TRADE', `[${decision.coin}] 入场成功，已挂载移动止损`);
+                                addLog('TRADE', `[${decision.coin}] 入场成功，单量: ${decision.size}，已挂载移动止损`);
                             } else {
                                 throw new Error(orderRes.msg || 'API ERROR');
                             }

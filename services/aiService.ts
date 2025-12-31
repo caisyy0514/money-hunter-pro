@@ -39,13 +39,14 @@ function analyze1HTrend(candles: CandleData[]) {
     return { direction: 'NEUTRAL', description: "1H 震荡" };
 }
 
-function analyze3mEntry(candles: CandleData[], trend: string, price: number, leverage: number) {
+function analyze3mEntry(candles: CandleData[], trend: string, price: number, leverage: number, initialStopLossRoi: number) {
     if (candles.length === 0) return { signal: false, action: 'HOLD', sl: 0, reason: "等待 K 线" };
     const curr = candles[candles.length - 1];
     if (!curr?.ema15) return { signal: false, action: 'HOLD', sl: 0, reason: "指标计算中" };
     
     const isGold = curr.ema15 > curr.ema60;
-    const hardSL = trend === 'UP' ? price * (1 - 0.05/leverage) : price * (1 + 0.05/leverage);
+    // 使用配置的初始止损收益率计算硬止损位
+    const hardSL = trend === 'UP' ? price * (1 - initialStopLossRoi/leverage) : price * (1 + initialStopLossRoi/leverage);
     
     if (trend === 'UP' && isGold) return { signal: true, action: 'BUY', sl: hardSL, reason: "3m 金叉共振入场" };
     if (trend === 'DOWN' && !isGold) return { signal: true, action: 'SELL', sl: hardSL, reason: "3m 死叉共振入场" };
@@ -61,7 +62,7 @@ export const analyzeCoin = async (
 ): Promise<AIDecision> => {
     const currentPrice = parseFloat(marketData.ticker.last);
     const trend1H = analyze1HTrend(marketData.candles1H);
-    const entry3m = analyze3mEntry(marketData.candles3m, trend1H.direction, currentPrice, parseFloat(strategy.leverage));
+    const entry3m = analyze3mEntry(marketData.candles3m, trend1H.direction, currentPrice, parseFloat(strategy.leverage), strategy.initialStopLossRoi);
     const instId = marketData.ticker.instId;
     const pos = accountData.positions.find(p => p.instId === instId);
     const hasPosition = !!pos && parseFloat(pos.pos) !== 0;

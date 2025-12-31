@@ -96,7 +96,8 @@ export interface StrategyProfile {
   maxPositions: number; // 最大同时持仓数
   newCoinDays: number; // 定义新币的天数
   leverage: string;
-  initialRisk: number; 
+  initialRisk: number; // 单次入场比例 (0.1 = 10%)
+  initialStopLossRoi: number; // 初始止损收益率 (0.05 = 5%)
   beTriggerRoi: number; 
   trailingCallback: number; // 移动止损回调比例 (例如 0.005)
   emptyInterval: number; 

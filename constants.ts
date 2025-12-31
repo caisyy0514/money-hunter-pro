@@ -19,6 +19,7 @@ const NEW_COIN_HUNTER_STRATEGY: StrategyProfile = {
   newCoinDays: 30,
   leverage: "10",
   initialRisk: 0.1, // 10% 保证金
+  initialStopLossRoi: 0.05, // 5% 初始止损
   beTriggerRoi: 0.001, // 利润 > 0 触发
   trailingCallback: 0.005, // 0.5% 回调幅度
   emptyInterval: 30,
@@ -41,6 +42,7 @@ const DEFAULT_STRATEGY: StrategyProfile = {
   newCoinDays: 365,
   leverage: "20",
   initialRisk: 0.15,
+  initialStopLossRoi: 0.1, // 10% 初始止损
   beTriggerRoi: 0.078,
   trailingCallback: 0.01,
   emptyInterval: 15,

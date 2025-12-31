@@ -70,13 +70,21 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, config, onSave }) => 
              <section className="space-y-4">
                 <h3 className="text-xs font-black text-okx-primary flex items-center gap-2"><Key size={14} /> 连接凭证</h3>
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
+                    <div className="space-y-1 col-span-2">
                         <label className="text-[10px] text-okx-subtext uppercase">DeepSeek API Key</label>
-                        <input type="password" value={localConfig.deepseekApiKey} onChange={e => setLocalConfig({...localConfig, deepseekApiKey: e.target.value})} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
+                        <input type="password" value={localConfig.deepseekApiKey} onChange={e => setLocalConfig({...localConfig, deepseekApiKey: e.target.value})} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" placeholder="用于 AI 决策分析" />
                     </div>
                     <div className="space-y-1">
                         <label className="text-[10px] text-okx-subtext uppercase">OKX API Key</label>
                         <input value={localConfig.okxApiKey} onChange={e => setLocalConfig({...localConfig, okxApiKey: e.target.value})} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-okx-subtext uppercase">OKX Secret Key</label>
+                        <input type="password" value={localConfig.okxSecretKey} onChange={e => setLocalConfig({...localConfig, okxSecretKey: e.target.value})} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-okx-subtext uppercase">OKX Passphrase</label>
+                        <input type="password" value={localConfig.okxPassphrase} onChange={e => setLocalConfig({...localConfig, okxPassphrase: e.target.value})} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
                     </div>
                 </div>
              </section>
@@ -85,15 +93,27 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, config, onSave }) => 
                 <h3 className="text-xs font-black text-emerald-400 flex items-center gap-2"><Target size={14} /> 核心参数</h3>
                 <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1">
-                        <label className="text-[10px] text-okx-subtext uppercase">最大仓位 (Slot)</label>
+                        <label className="text-[10px] text-okx-subtext uppercase">最大持仓槽位 (Slots)</label>
                         <input type="number" value={currentStrategy.maxPositions} onChange={e => updateStrategy(currentStrategy.id, { maxPositions: parseInt(e.target.value) })} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
                     </div>
                     <div className="space-y-1">
-                        <label className="text-[10px] text-okx-subtext uppercase">移动止损 (%)</label>
+                        <label className="text-[10px] text-okx-subtext uppercase">单次入场比例 (%)</label>
+                        <input type="number" step="1" value={currentStrategy.initialRisk * 100} onChange={e => updateStrategy(currentStrategy.id, { initialRisk: parseFloat(e.target.value) / 100 })} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-okx-subtext uppercase">初始止损 (ROI %)</label>
+                        <input type="number" step="0.5" value={currentStrategy.initialStopLossRoi * 100} onChange={e => updateStrategy(currentStrategy.id, { initialStopLossRoi: parseFloat(e.target.value) / 100 })} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-okx-subtext uppercase">保本盾牌触发 (%)</label>
+                        <input type="number" step="0.1" value={currentStrategy.beTriggerRoi * 100} onChange={e => updateStrategy(currentStrategy.id, { beTriggerRoi: parseFloat(e.target.value) / 100 })} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-okx-subtext uppercase">移动止损回调 (%)</label>
                         <input type="number" step="0.1" value={currentStrategy.trailingCallback * 100} onChange={e => updateStrategy(currentStrategy.id, { trailingCallback: parseFloat(e.target.value) / 100 })} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
                     </div>
                     <div className="space-y-1">
-                        <label className="text-[10px] text-okx-subtext uppercase">杠杆</label>
+                        <label className="text-[10px] text-okx-subtext uppercase">杠杆倍数</label>
                         <input value={currentStrategy.leverage} onChange={e => updateStrategy(currentStrategy.id, { leverage: e.target.value })} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
                     </div>
                 </div>
@@ -114,9 +134,9 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, config, onSave }) => 
         <div className="p-6 border-t border-okx-border flex justify-between items-center bg-okx-card">
            <label className="flex items-center gap-2 cursor-pointer">
                <input type="checkbox" checked={localConfig.isSimulation} onChange={e => setLocalConfig({...localConfig, isSimulation: e.target.checked})} className="w-4 h-4 rounded border-okx-border bg-black" />
-               <span className="text-xs text-okx-subtext">模拟交易模式</span>
+               <span className="text-xs text-okx-subtext">模拟交易模式 (Simulated)</span>
            </label>
-           <button onClick={() => onSave(localConfig)} className="bg-okx-primary text-white px-8 py-2 rounded-xl font-bold text-xs"><Save size={16} className="inline mr-2" /> 保存配置</button>
+           <button onClick={() => onSave(localConfig)} className="bg-okx-primary text-white px-8 py-2 rounded-xl font-bold text-xs"><Save size={16} className="inline mr-2" /> 保存并同步战术</button>
         </div>
       </div>
     </div>
