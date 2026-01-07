@@ -17,7 +17,6 @@ const DecisionReport: React.FC<Props> = ({ decision }) => {
       );
   }
 
-  // 强化版渲染函数，确保不会有裸对象进入 JSX 子节点
   const safeRender = (content: any, isPre: boolean = false) => {
     if (content === null || content === undefined) return <span className="text-gray-600 italic">--</span>;
     
@@ -28,7 +27,6 @@ const DecisionReport: React.FC<Props> = ({ decision }) => {
         stringContent = String(content);
     } else if (typeof content === 'object') {
         try {
-            // 如果 AI 返回了 JSON 对象，将其格式化为字符串
             stringContent = JSON.stringify(content, null, 2);
         } catch (e) {
             stringContent = "[解析数据出错]";

@@ -135,6 +135,7 @@ export interface AppConfig {
   okxApiKey: string;
   okxSecretKey: string;
   okxPassphrase: string;
+  deepseekApiKey: string;
   isSimulation: boolean;
   activeStrategyId: string;
   strategies: StrategyProfile[];

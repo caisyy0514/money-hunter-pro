@@ -79,8 +79,12 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, config, onSave }) => 
 
             <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
                <section className="space-y-4">
-                  <h3 className="text-xs font-black text-okx-primary flex items-center gap-2"><Key size={14} /> OKX 连接凭证</h3>
-                  <div className="grid grid-cols-3 gap-4">
+                  <h3 className="text-xs font-black text-okx-primary flex items-center gap-2"><Key size={14} /> 连接凭证</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1 col-span-2">
+                          <label className="text-[10px] text-okx-subtext uppercase">DeepSeek API Key</label>
+                          <input type="password" value={localConfig.deepseekApiKey} onChange={e => setLocalConfig({...localConfig, deepseekApiKey: e.target.value})} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" placeholder="用于 AI 决策分析" />
+                      </div>
                       <div className="space-y-1">
                           <label className="text-[10px] text-okx-subtext uppercase">OKX API Key</label>
                           <input value={localConfig.okxApiKey} onChange={e => setLocalConfig({...localConfig, okxApiKey: e.target.value})} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
@@ -94,7 +98,6 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, config, onSave }) => 
                           <input type="password" value={localConfig.okxPassphrase} onChange={e => setLocalConfig({...localConfig, okxPassphrase: e.target.value})} className="w-full bg-black/60 border border-okx-border rounded-xl px-4 py-2 text-sm text-white" />
                       </div>
                   </div>
-                  <p className="text-[10px] text-okx-subtext italic">* Gemini API 已由系统自动同步，无需配置 Key。</p>
                </section>
 
                <section className="space-y-4">

@@ -80,9 +80,13 @@ const runTradingLoop = async () => {
             if (Date.now() - lastAnalysisTime >= interval) {
                 lastAnalysisTime = Date.now();
                 
+                if (!config.deepseekApiKey && !config.isSimulation) {
+                    addLog('WARNING', '未配置 DeepSeek API Key，可能无法进行 AI 决策分析');
+                }
+
                 addLog('INFO', `>>> 扫描中 (${accountData.positions.length}/${activeStrategy.maxPositions}) <<<`);
                 
-                const decisions = await aiService.getTradingDecision(marketData, accountData, activeStrategy);
+                const decisions = await aiService.getTradingDecision(config.deepseekApiKey, marketData, accountData, activeStrategy);
                 const instruments = await okxService.fetchInstruments();
 
                 for (const decision of decisions) {
@@ -177,7 +181,7 @@ app.get('/api/history', (req, res) => {
 });
 
 app.get('/api/config', (req, res) => {
-    res.json({ ...config, okxSecretKey: config.okxSecretKey ? '***' : '', okxPassphrase: config.okxPassphrase ? '***' : '' });
+    res.json({ ...config, okxSecretKey: config.okxSecretKey ? '***' : '', okxPassphrase: config.okxPassphrase ? '***' : '', deepseekApiKey: config.deepseekApiKey ? '***' : '' });
 });
 
 app.get('/api/instruments', async (req, res) => {
@@ -189,6 +193,7 @@ app.post('/api/config', (req, res) => {
     const newConfig = { ...req.body };
     if (newConfig.okxSecretKey === '***') newConfig.okxSecretKey = config.okxSecretKey;
     if (newConfig.okxPassphrase === '***') newConfig.okxPassphrase = config.okxPassphrase;
+    if (newConfig.deepseekApiKey === '***') newConfig.deepseekApiKey = config.deepseekApiKey;
     config = newConfig;
     protectedPositions.clear();
     addLog('INFO', '全局战术配置已更新同步');
@@ -216,7 +221,6 @@ app.post('/api/backtest/run', async (req, res) => {
         let all3m: CandleData[] = [];
         let after = '';
         const limit = '100';
-        // 模拟分页获取直到覆盖范围
         while (true) {
             const batch = await okxService.fetchHistoryCandles(instInfo.instId, '3m', after, limit);
             if (batch.length === 0) break;
@@ -224,11 +228,10 @@ app.post('/api/backtest/run', async (req, res) => {
             all3m = [...batch, ...all3m];
             if (oldest < btConfig.startTime) break;
             after = batch[0].ts;
-            await sleep(100); // 速率限制
-            if (all3m.length > 5000) break; // 演示限制
+            await sleep(100); 
+            if (all3m.length > 5000) break; 
         }
         
-        // 过滤时间范围并计算EMA
         all3m = okxService.enrichCandlesWithEMA(all3m.filter(c => {
             const ts = parseInt(c.ts);
             return ts >= btConfig.startTime && ts <= btConfig.endTime;
@@ -247,7 +250,6 @@ app.post('/api/backtest/run', async (req, res) => {
             const price = parseFloat(currentCandle.c);
             const ts = parseInt(currentCandle.ts);
 
-            // Mock SingleMarketData for analysis
             const mData: any = {
                 ticker: { last: currentCandle.c, instId: instInfo.instId },
                 candles1H: [], 
@@ -267,7 +269,7 @@ app.post('/api/backtest/run', async (req, res) => {
                 }] : []
             };
 
-            const decision = await aiService.analyzeCoin(btConfig.coin, mData, virtualAccount, strategy, true);
+            const decision = await aiService.analyzeCoin(config.deepseekApiKey, btConfig.coin, mData, virtualAccount, strategy, true);
 
             // Execute decision
             if (decision.action === 'BUY' && !position) {
@@ -297,7 +299,6 @@ app.post('/api/backtest/run', async (req, res) => {
                 position = null;
             }
 
-            // Stats
             const currentEquity = balance + (position ? (price - position.entryPrice) / position.entryPrice * (position.side === 'long' ? 1 : -1) * position.margin * parseFloat(strategy.leverage) : 0);
             if (currentEquity > peak) peak = currentEquity;
             const dd = (peak - currentEquity) / peak;
@@ -308,7 +309,6 @@ app.post('/api/backtest/run', async (req, res) => {
             }
         }
 
-        // 3. Results Summary
         const finalBalance = balance;
         const totalProfit = finalBalance - btConfig.initialBalance;
         const profitTrades = trades.filter(t => t.type === 'CLOSE' && (t.profit || 0) > 0);
@@ -340,7 +340,7 @@ app.post('/api/backtest/run', async (req, res) => {
 app.post('/api/assistant/chat', async (req, res) => {
     try {
         const { messages } = req.body;
-        const reply = await aiService.generateAssistantResponse(messages);
+        const reply = await aiService.generateAssistantResponse(config.deepseekApiKey, messages);
         res.json({ reply });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
