@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Play, Loader2, TrendingUp, BarChart3, History, Settings2, ChevronDown, ChevronUp, Save, Plus, Trash2, Search } from 'lucide-react';
+import { X, Play, Loader2, TrendingUp, BarChart3, History, Settings2, ChevronDown, ChevronUp, Save, Plus, Trash2, Search, Calendar } from 'lucide-react';
 import { BacktestConfig, BacktestResult, StrategyProfile, InstrumentInfo } from '../types';
 import BacktestReport from './BacktestReport';
 
@@ -30,7 +30,6 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen) {
-        // 获取配置和所有可用币种
         Promise.all([
             fetch('/api/config').then(res => res.json()),
             fetch('/api/instruments').then(res => res.json())
@@ -42,7 +41,6 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
             const initialLab = { ...active };
             setLabStrategy(initialLab);
             
-            // 默认选择策略中的第一个币种进行回测
             if (initialLab.enabledCoins.length > 0) {
                 setConfig(prev => ({ ...prev, coin: initialLab.enabledCoins[0] }));
             }
@@ -54,7 +52,6 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
     if (labStrategy) {
         const next = { ...labStrategy, ...updates };
         setLabStrategy(next);
-        // 如果修改了币种列表且当前选中的回测币不在列表内，重置它
         if (updates.enabledCoins && !updates.enabledCoins.includes(config.coin)) {
             setConfig(prev => ({ ...prev, coin: updates.enabledCoins![0] || '' }));
         }
@@ -115,10 +112,9 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
     } catch (e) { alert("同步失败"); }
   };
 
-  // 计算当前可回测的币种列表
   const backtestableCoins = labStrategy?.coinSelectionMode === 'manual' 
     ? labStrategy.enabledCoins 
-    : Object.keys(allInstruments).slice(0, 20); // 新币模式下展示部分活跃币种供测试
+    : Object.keys(allInstruments).slice(0, 20);
 
   if (!isOpen) return null;
 
@@ -134,11 +130,10 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
         </div>
 
         <div className="flex-1 overflow-hidden flex flex-col">
-            {/* 参数控制区 */}
             <div className="p-6 bg-black/40 border-b border-okx-border space-y-6 shrink-0">
-                <div className="grid grid-cols-5 gap-6">
+                <div className="grid grid-cols-6 gap-4">
                     <div className="space-y-2">
-                        <label className="text-[10px] text-okx-subtext uppercase font-bold">选择基准/新建</label>
+                        <label className="text-[10px] text-okx-subtext uppercase font-bold">基准/新建</label>
                         <select 
                             value={labStrategy?.id} 
                             onChange={e => {
@@ -149,60 +144,70 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                     if (selected) setLabStrategy({...selected});
                                 }
                             }}
-                            className="w-full bg-okx-bg border border-okx-border rounded-xl px-4 py-2 text-sm text-white outline-none"
+                            className="w-full bg-okx-bg border border-okx-border rounded-xl px-3 py-2 text-xs text-white outline-none"
                         >
-                            <option value={NEW_STRATEGY_ID}>✨ [+ 建立新战术模板]</option>
-                            <optgroup label="现有实战策略">
+                            <option value={NEW_STRATEGY_ID}>✨ [+ 新建战术]</option>
+                            <optgroup label="现有策略">
                                 {strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </optgroup>
                         </select>
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-[10px] text-okx-subtext uppercase font-bold">推演目标 (Target)</label>
+                        <label className="text-[10px] text-okx-subtext uppercase font-bold">测试靶点</label>
                         <select 
                             value={config.coin} 
                             onChange={e => setConfig({...config, coin: e.target.value})}
-                            className="w-full bg-okx-bg border border-okx-border rounded-xl px-4 py-2 text-sm text-white outline-none"
+                            className="w-full bg-okx-bg border border-okx-border rounded-xl px-3 py-2 text-xs text-white outline-none"
                         >
-                            <option value="">请选择测试币种</option>
+                            <option value="">请选择币种</option>
                             {backtestableCoins.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-[10px] text-okx-subtext uppercase font-bold">初始资金 (USDT)</label>
+                        <label className="text-[10px] text-okx-subtext uppercase font-bold">初始资金</label>
                         <input 
                             type="number" 
                             value={config.initialBalance} 
                             onChange={e => setConfig({...config, initialBalance: parseFloat(e.target.value)})}
-                            className="w-full bg-okx-bg border border-okx-border rounded-xl px-4 py-2 text-sm text-white" 
+                            className="w-full bg-okx-bg border border-okx-border rounded-xl px-3 py-2 text-xs text-white" 
                         />
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-[10px] text-okx-subtext uppercase font-bold">推演时间跨度</label>
+                        <label className="text-[10px] text-okx-subtext uppercase font-bold">推演起点</label>
                         <input 
                             type="date" 
                             value={new Date(config.startTime).toISOString().split('T')[0]} 
                             onChange={e => setConfig({...config, startTime: new Date(e.target.value).getTime()})}
-                            className="w-full bg-okx-bg border border-okx-border rounded-xl px-4 py-2 text-sm text-white" 
+                            className="w-full bg-okx-bg border border-okx-border rounded-xl px-3 py-2 text-xs text-white" 
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-[10px] text-okx-subtext uppercase font-bold">推演终点</label>
+                        <input 
+                            type="date" 
+                            value={new Date(config.endTime).toISOString().split('T')[0]} 
+                            onChange={e => setConfig({...config, endTime: new Date(e.target.value).getTime() + 86399999})}
+                            className="w-full bg-okx-bg border border-okx-border rounded-xl px-3 py-2 text-xs text-white" 
                         />
                     </div>
 
                     <div className="flex items-end gap-2">
                         <button 
                             onClick={() => setShowLab(!showLab)}
-                            className={`flex-1 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all ${showLab ? 'bg-purple-600/20 border-purple-600 text-purple-400' : 'bg-white/5 border-okx-border text-okx-subtext'}`}
+                            className={`flex-1 py-2 rounded-xl text-[10px] font-bold border flex items-center justify-center gap-1 transition-all ${showLab ? 'bg-purple-600/20 border-purple-600 text-purple-400' : 'bg-white/5 border-okx-border text-okx-subtext'}`}
                         >
-                            <Settings2 size={14} /> 实验面板 {showLab ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
+                            <Settings2 size={12} /> 面板
                         </button>
                         <button 
                             onClick={runBacktest}
                             disabled={loading || !labStrategy || !config.coin}
-                            className="flex-[1.5] bg-okx-primary hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg"
+                            className="flex-[1.5] bg-okx-primary hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl flex items-center justify-center gap-1 transition-all shadow-lg text-[10px]"
                         >
-                            {loading ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} fill="currentColor" />}
+                            {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} fill="currentColor" />}
                             运行推演
                         </button>
                     </div>
@@ -232,7 +237,7 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
                             </div>
                             {labStrategy.coinSelectionMode === 'manual' ? (
                                 <div className="col-span-2 space-y-2">
-                                    <label className="text-[10px] text-purple-400 uppercase font-black">战术关联币种池 ({labStrategy.enabledCoins.length})</label>
+                                    <label className="text-[10px] text-purple-400 uppercase font-black">关联币种池 ({labStrategy.enabledCoins.length})</label>
                                     <div className="flex flex-wrap gap-2 p-2 bg-black/40 border border-okx-border rounded-xl min-h-[38px]">
                                         {labStrategy.enabledCoins.map(coin => (
                                             <span key={coin} className="flex items-center gap-1 bg-okx-primary/20 text-okx-primary px-2 py-0.5 rounded text-[10px] font-bold border border-okx-primary/30">
@@ -252,16 +257,7 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                                     {Object.keys(allInstruments)
                                                         .filter(c => c.includes(coinSearch) && !labStrategy.enabledCoins.includes(c))
                                                         .map(c => (
-                                                            <div 
-                                                                key={c} 
-                                                                onClick={() => {
-                                                                    updateLab({ enabledCoins: [...labStrategy.enabledCoins, c] });
-                                                                    setCoinSearch('');
-                                                                }}
-                                                                className="px-3 py-1.5 hover:bg-white/5 cursor-pointer text-[10px]"
-                                                            >
-                                                                {c}
-                                                            </div>
+                                                            <div key={c} onClick={() => { updateLab({ enabledCoins: [...labStrategy.enabledCoins, c] }); setCoinSearch(''); }} className="px-3 py-1.5 hover:bg-white/5 cursor-pointer text-[10px]">{c}</div>
                                                         ))
                                                     }
                                                 </div>
@@ -319,7 +315,13 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 {result ? (
                     <div className="space-y-6">
                         <div className="flex justify-between items-center">
-                            <h3 className="text-xs font-black text-okx-primary uppercase tracking-widest">推演结论报告 [币种: {config.coin}]</h3>
+                            <div className="flex flex-col">
+                                <h3 className="text-xs font-black text-okx-primary uppercase tracking-widest">推演结论报告 [币种: {config.coin}]</h3>
+                                <div className="flex items-center gap-2 text-[10px] text-okx-subtext mt-1">
+                                    <Calendar size={10} />
+                                    {new Date(config.startTime).toLocaleDateString()} — {new Date(config.endTime).toLocaleDateString()}
+                                </div>
+                            </div>
                             <button 
                                 onClick={saveToRealtime}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase flex items-center gap-2 transition-all shadow-lg shadow-emerald-600/20"
@@ -332,7 +334,7 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 ) : !loading ? (
                     <div className="h-full flex flex-col items-center justify-center opacity-30 gap-4">
                         <BarChart3 size={80} strokeWidth={1} />
-                        <p className="text-sm">实验室已就绪。请确认策略币种池并选择测试靶点</p>
+                        <p className="text-sm">实验室已就绪。请设定推演周期并选择测试靶点</p>
                     </div>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center gap-6">
@@ -342,7 +344,7 @@ const BacktestModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         </div>
                         <div className="text-center">
                             <p className="text-lg font-bold text-white">时空复刻中...</p>
-                            <p className="text-xs text-okx-subtext mt-1">正在模拟 [${config.coin}] 在特定周期内的逻辑表现</p>
+                            <p className="text-xs text-okx-subtext mt-1">正在模拟该周期内的逻辑表现</p>
                         </div>
                     </div>
                 )}
