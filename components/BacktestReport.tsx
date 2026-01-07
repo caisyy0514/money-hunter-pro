@@ -23,7 +23,7 @@ const BacktestReport: React.FC<Props> = ({ result }) => {
       {/* 核心看板 */}
       <div className="grid grid-cols-6 gap-4">
         {stats.map((s, i) => (
-          <div key={i} className="bg-okx-card border border-okx-border p-4 rounded-2xl space-y-2">
+          <div key={i} className="bg-okx-card border border-okx-border p-4 rounded-2xl space-y-2 hover:border-okx-primary/20 transition-all">
             <div className="flex items-center justify-between">
                 <s.icon size={16} className={s.color} />
                 <span className="text-[10px] text-okx-subtext font-bold uppercase tracking-widest">{s.label}</span>
@@ -34,11 +34,11 @@ const BacktestReport: React.FC<Props> = ({ result }) => {
       </div>
 
       {/* 净值曲线图 */}
-      <div className="bg-okx-card border border-okx-border rounded-3xl p-6 h-[400px] flex flex-col">
+      <div className="bg-okx-card border border-okx-border rounded-3xl p-6 h-[400px] flex flex-col shadow-xl">
         <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-sm flex items-center gap-2"><Activity size={16} className="text-okx-primary" /> 账户净值演变曲线 (USDT)</h3>
-            <div className="flex gap-4 text-[10px] font-mono">
-                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-okx-primary"></div> Equity</span>
+            <div className="flex gap-4 text-[10px] font-mono text-okx-subtext uppercase">
+                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-okx-primary"></div> Equity Curve</span>
             </div>
         </div>
         <div className="flex-1">
@@ -50,7 +50,7 @@ const BacktestReport: React.FC<Props> = ({ result }) => {
                             <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
                         </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.3} />
                     <XAxis 
                         dataKey="timestamp" 
                         hide
@@ -61,21 +61,23 @@ const BacktestReport: React.FC<Props> = ({ result }) => {
                         tick={{fontSize: 10, fill: '#71717a'}} 
                         axisLine={false}
                         tickLine={false}
+                        tickFormatter={(v) => v.toFixed(0)}
                     />
                     <Tooltip 
-                        contentStyle={{backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px', fontSize: '12px'}}
+                        contentStyle={{backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '12px', fontSize: '12px', color: '#fff'}}
                         labelFormatter={(ts) => new Date(ts).toLocaleString()}
+                        formatter={(val: number) => [val.toFixed(2), "Equity"]}
                     />
-                    <Area type="monotone" dataKey="equity" stroke="#2563eb" fillOpacity={1} fill="url(#colorEq)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="equity" stroke="#2563eb" fillOpacity={1} fill="url(#colorEq)" strokeWidth={2} isAnimationActive={true} />
                 </AreaChart>
             </ResponsiveContainer>
         </div>
       </div>
 
       {/* 详细指标与周期分析 */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-2 gap-6 pb-4">
          <div className="bg-okx-card border border-okx-border rounded-3xl p-6 space-y-4">
-            <h3 className="font-bold text-sm">周期表现预估</h3>
+            <h3 className="font-bold text-sm flex items-center gap-2"><DollarSign size={16} className="text-emerald-400" /> 周期表现预估</h3>
             <div className="space-y-4">
                 <div className="flex justify-between items-center p-3 bg-black/20 rounded-xl border border-white/5">
                     <span className="text-xs text-okx-subtext">预计周收益率</span>
@@ -86,27 +88,27 @@ const BacktestReport: React.FC<Props> = ({ result }) => {
                     <span className="text-sm font-bold text-emerald-400">+{result.monthlyRoi * 100}%</span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-black/20 rounded-xl border border-white/5">
-                    <span className="text-xs text-okx-subtext">平均盈利 / 平均亏损</span>
+                    <span className="text-xs text-okx-subtext">盈利能力因子</span>
                     <div className="text-right">
-                        <div className="text-xs font-bold"><span className="text-emerald-400">+{result.avgProfit.toFixed(1)}</span> / <span className="text-red-400">-{result.avgLoss.toFixed(1)}</span></div>
+                        <div className="text-xs font-bold"><span className="text-emerald-400">AVG WIN: +{result.avgProfit.toFixed(1)}</span></div>
+                        <div className="text-[10px] font-bold text-red-400">AVG LOSS: -{result.avgLoss.toFixed(1)}</div>
                     </div>
                 </div>
             </div>
          </div>
          
          <div className="bg-okx-card border border-okx-border rounded-3xl p-6 flex flex-col">
-            <h3 className="font-bold text-sm mb-4">关键成交记录</h3>
+            <h3 className="font-bold text-sm mb-4 flex items-center gap-2"><Activity size={16} className="text-blue-400" /> 关键成交记录 (Recent 20)</h3>
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 max-h-[200px]">
-                {/* Fix: removed redundant .filter(t => t.type !== 'HOLD') as 'HOLD' is not a valid trade type in BacktestTrade */}
                 {result.trades.slice(-20).reverse().map((t, i) => (
                     <div key={i} className="flex justify-between items-center p-2 text-[10px] border-b border-white/5 font-mono">
-                        <div className="flex items-center gap-2">
-                            <span className={t.type === 'BUY' ? 'text-okx-up' : t.type === 'SELL' ? 'text-okx-down' : 'text-blue-400'}>{t.type}</span>
+                        <div className="flex items-center gap-3">
+                            <span className={`font-bold ${t.type === 'BUY' ? 'text-okx-up' : t.type === 'SELL' ? 'text-okx-down' : 'text-blue-400'}`}>{t.type}</span>
                             <span className="text-okx-subtext">{new Date(t.timestamp).toLocaleDateString()}</span>
                         </div>
                         <div className="flex gap-4">
-                            <span>@{t.price}</span>
-                            {t.profit && <span className={t.profit > 0 ? 'text-emerald-400' : 'text-red-400'}>{t.profit > 0 ? '+' : ''}{t.profit.toFixed(1)}</span>}
+                            <span className="text-gray-400">@{t.price}</span>
+                            {t.profit !== undefined && <span className={t.profit > 0 ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>{t.profit > 0 ? '+' : ''}{t.profit.toFixed(1)}</span>}
                         </div>
                     </div>
                 ))}

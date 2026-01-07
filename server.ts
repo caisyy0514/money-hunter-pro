@@ -200,6 +200,19 @@ app.post('/api/config', (req, res) => {
     res.json({ success: true });
 });
 
+app.post('/api/strategies/save', (req, res) => {
+    const newStrategy: StrategyProfile = req.body;
+    const index = config.strategies.findIndex(s => s.id === newStrategy.id);
+    if (index !== -1) {
+        config.strategies[index] = newStrategy;
+        addLog('INFO', `实验室策略 [${newStrategy.name}] 已成功同步回实战列表`);
+    } else {
+        config.strategies.push(newStrategy);
+        addLog('INFO', `实验室新策略 [${newStrategy.name}] 已保存到实战列表`);
+    }
+    res.json({ success: true });
+});
+
 app.post('/api/toggle', (req, res) => {
     isRunning = req.body.running;
     if (!isRunning) protectedPositions.clear();
@@ -209,14 +222,13 @@ app.post('/api/toggle', (req, res) => {
 
 // BACKTEST CORE
 app.post('/api/backtest/run', async (req, res) => {
-    const btConfig: BacktestConfig = req.body;
-    const strategy = config.strategies.find(s => s.id === config.activeStrategyId) || config.strategies[0];
+    const { config: btConfig, strategy }: { config: BacktestConfig, strategy: StrategyProfile } = req.body;
     const insts = await okxService.fetchInstruments();
     const instInfo = insts[btConfig.coin];
     if (!instInfo) return res.status(400).json({ error: "Invalid coin" });
 
     try {
-        console.log(`Starting backtest for ${btConfig.coin}...`);
+        console.log(`Starting backtest for ${btConfig.coin} using logic: ${strategy.name}...`);
         // 1. Fetch data
         let all3m: CandleData[] = [];
         let after = '';
