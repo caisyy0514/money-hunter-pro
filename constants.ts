@@ -54,7 +54,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   okxApiKey: "",
   okxSecretKey: "",
   okxPassphrase: "",
-  deepseekApiKey: "", 
   isSimulation: true,
   activeStrategyId: "new-coin-hunter",
   strategies: [NEW_COIN_HUNTER_STRATEGY, DEFAULT_STRATEGY]

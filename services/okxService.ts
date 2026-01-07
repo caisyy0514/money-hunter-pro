@@ -15,11 +15,12 @@ const signRequest = (method: string, requestPath: string, body: string = '', sec
 };
 
 const getHeaders = (method: string, requestPath: string, body: string = '', config: any) => {
+  if (!config.okxApiKey || !config.okxSecretKey) return {};
   const { timestamp, signature } = signRequest(method, requestPath, body, config.okxSecretKey);
   return {
     'Content-Type': 'application/json',
     'OK-ACCESS-KEY': config.okxApiKey,
-    'OK-ACCESS-PASSPHRASE': config.okxPassphrase,
+    'OK-ACCESS-PASSPHRASE': config.okxPassphrase || '',
     'OK-ACCESS-SIGN': signature,
     'OK-ACCESS-TIMESTAMP': timestamp,
     'OK-ACCESS-SIMULATED': config.isSimulation ? '1' : '0' 
@@ -56,6 +57,19 @@ export const fetchInstruments = async (): Promise<Record<string, InstrumentInfo>
   }
 };
 
+export const fetchHistoryCandles = async (instId: string, bar: string, after: string = '', limit: string = '100'): Promise<CandleData[]> => {
+    try {
+        const url = `${BASE_URL}/api/v5/market/history-candles?instId=${instId}&bar=${bar}&limit=${limit}${after ? `&after=${after}` : ''}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        if (json.code !== '0') return [];
+        return formatCandles(json.data || []).reverse(); // 返回从旧到新
+    } catch (e) {
+        console.error("Fetch history candles failed", e);
+        return [];
+    }
+};
+
 const calculateEMA = (data: CandleData[], period: number): number[] => {
   if (data.length === 0) return [];
   const k = 2 / (period + 1);
@@ -70,7 +84,7 @@ const calculateEMA = (data: CandleData[], period: number): number[] => {
   return result;
 };
 
-const enrichCandlesWithEMA = (candles: CandleData[]): CandleData[] => {
+export const enrichCandlesWithEMA = (candles: CandleData[]): CandleData[] => {
     if(!candles || candles.length === 0) return [];
     const ema15 = calculateEMA(candles, 15);
     const ema60 = calculateEMA(candles, 60);
@@ -129,7 +143,6 @@ export const fetchMarketData = async (config: any): Promise<MarketDataCollection
           const listT = parseInt(instruments[c].listTime);
           return (now - listT) < threshold;
       });
-      // 限制扫描数量，防止 API 频率受限
       coins = coins.slice(0, 15);
   } else {
       coins = activeStrategy.enabledCoins;
@@ -165,7 +178,7 @@ export const fetchAccountData = async (config: any): Promise<AccountContext> => 
     const posRes = await fetch(BASE_URL + posPath, { method: 'GET', headers: getHeaders('GET', posPath, '', config) });
     const posJson = await posRes.json();
 
-    if (balJson.code !== '0') throw new Error(`Balance API: ${balJson.msg}`);
+    if (balJson.code !== '0') throw new Error(`Balance API Error: [${balJson.code}] ${balJson.msg}`);
     const balanceData = balJson.data?.[0]?.details?.[0]; 
     
     let positions: PositionData[] = [];
@@ -186,6 +199,23 @@ export const fetchAccountData = async (config: any): Promise<AccountContext> => 
   }
 };
 
+export const setLeverage = async (instId: string, leverage: string, config: any): Promise<any> => {
+    if (config.isSimulation) return { code: "0", msg: "OK" };
+    const path = "/api/v5/account/set-leverage";
+    const body = JSON.stringify({
+        instId,
+        lever: leverage,
+        mgnMode: "isolated"
+    });
+    const headers = getHeaders('POST', path, body, config);
+    try {
+        const response = await fetch(BASE_URL + path, { method: 'POST', headers, body });
+        return await response.json();
+    } catch (e: any) {
+        return { code: "-1", msg: e.message };
+    }
+};
+
 export const executeOrder = async (order: AIDecision, config: any): Promise<any> => {
   if (config.isSimulation) return { code: "0", msg: "OK" };
   const path = "/api/v5/trade/order";
@@ -199,11 +229,18 @@ export const executeOrder = async (order: AIDecision, config: any): Promise<any>
     reduceOnly: order.action === 'CLOSE'
   });
   const headers = getHeaders('POST', path, body, config);
-  const response = await fetch(BASE_URL + path, { method: 'POST', headers, body });
-  return await response.json();
+  try {
+      const response = await fetch(BASE_URL + path, { method: 'POST', headers, body });
+      const res = await response.json();
+      if (res.code !== '0' && res.data?.[0]) {
+          return { code: res.data[0].sCode || res.code, msg: res.data[0].sMsg || res.msg };
+      }
+      return res;
+  } catch (e: any) {
+      return { code: "-1", msg: e.message };
+  }
 };
 
-// 下移动止损算法单 (Trailing Stop)
 export const placeTrailingStop = async (instId: string, posSide: string, size: string, callbackRatio: number, config: any) => {
     if (config.isSimulation) return { code: "0" };
     const path = "/api/v5/trade/order-algo";
@@ -217,24 +254,33 @@ export const placeTrailingStop = async (instId: string, posSide: string, size: s
         callbackRatio: callbackRatio.toString(),
         reduceOnly: true
     });
-    const res = await fetch(BASE_URL + path, { method: 'POST', headers: getHeaders('POST', path, body, config), body });
-    return await res.json();
+    const headers = getHeaders('POST', path, body, config);
+    try {
+        const res = await fetch(BASE_URL + path, { method: 'POST', headers, body });
+        return await res.json();
+    } catch (e: any) {
+        return { code: "-1", msg: e.message };
+    }
 };
 
 export const updatePositionTPSL = async (instId: string, posSide: string, size: string, slPrice: string, config: any) => {
     if (config.isSimulation) return { code: "0" };
     const path = "/api/v5/trade/order-algo";
-    // 覆盖之前的条件单
     const body = JSON.stringify({
         instId, posSide, tdMode: 'isolated', side: posSide === 'long' ? 'sell' : 'buy',
         ordType: 'conditional', sz: size, reduceOnly: true, slTriggerPx: slPrice, slOrdPx: '-1'
     });
-    const res = await fetch(BASE_URL + path, { method: 'POST', headers: getHeaders('POST', path, body, config), body });
-    return await res.json();
+    const headers = getHeaders('POST', path, body, config);
+    try {
+        const res = await fetch(BASE_URL + path, { method: 'POST', headers, body });
+        return await res.json();
+    } catch (e: any) {
+        return { code: "-1", msg: e.message };
+    }
 };
 
 function formatCandles(apiCandles: any[]): CandleData[] {
-  return apiCandles.map((c: string[]) => ({ ts: c[0], o: c[1], h: c[2], l: c[3], c: c[4], vol: c[5] })).reverse(); 
+  return apiCandles.map((c: string[]) => ({ ts: c[0], o: c[1], h: c[2], l: c[3], c: c[4], vol: c[5] })); 
 }
 
 function generateMockMarketData(): MarketDataCollection {

@@ -135,7 +135,6 @@ export interface AppConfig {
   okxApiKey: string;
   okxSecretKey: string;
   okxPassphrase: string;
-  deepseekApiKey: string;
   isSimulation: boolean;
   activeStrategyId: string;
   strategies: StrategyProfile[];
@@ -151,4 +150,47 @@ export interface SystemLog {
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+}
+
+// Backtest Related
+export interface BacktestConfig {
+  startTime: number;
+  endTime: number;
+  initialBalance: number;
+  coin: string;
+}
+
+export interface BacktestTrade {
+  type: 'BUY' | 'SELL' | 'CLOSE';
+  price: number;
+  contracts: number;
+  timestamp: number;
+  fee: number;
+  profit?: number;
+  roi?: number;
+  reason: string;
+}
+
+export interface BacktestSnapshot {
+  timestamp: number;
+  equity: number;
+  price: number;
+  drawdown: number;
+}
+
+export interface BacktestResult {
+  totalTrades: number;
+  winRate: number;
+  totalProfit: number;
+  finalBalance: number;
+  maxDrawdown: number;
+  sharpeRatio: number;
+  annualizedRoi: number;
+  weeklyRoi: number;
+  monthlyRoi: number;
+  avgProfit: number;
+  avgLoss: number;
+  profitFactor: number;
+  trades: BacktestTrade[];
+  equityCurve: BacktestSnapshot[];
 }
